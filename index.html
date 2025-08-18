@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Risk Analyzer</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+        h1 { color: #2c3e50; }
+        #link-form { display: flex; gap: 10px; margin-bottom: 20px; }
+        #link-input { flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+        button { padding: 10px 20px; background-color: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background-color: #2980b9; }
+        button:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+        #result-container { margin-top: 20px; padding: 15px; background-color: #f2f2f2; border: 1px solid #ddd; border-radius: 4px; white-space: pre-wrap; font-family: monospace; min-height: 50px; }
+        .status { font-style: italic; color: #888; }
+    </style>
+</head>
+<body>
+    <h1>Enter a Link for Risk Analysis</h1>
+
+    <form id="link-form">
+        <input type="url" id="link-input" placeholder="https://example.com/terms" required>
+        <button type="submit" id="submit-button">Start Analysis</button>
+    </form>
+
+    <h3>Result:</h3>
+    <div id="status-container" class="status">Job status will appear here.</div>
+    <div id="result-container"></div>
+
+    <script>
+        // Get references to the HTML elements we'll need to interact with
+        const linkForm = document.getElementById('link-form');
+        const linkInput = document.getElementById('link-input');
+        const submitButton = document.getElementById('submit-button');
+        const statusContainer = document.getElementById('status-container');
+        const resultContainer = document.getElementById('result-container');
+
+        // This variable will hold our polling timer
+        let pollingInterval;
+
+        // This function checks the status of the job
+        const pollStatus = (statusUrl) => {
+            // `setInterval` will run the enclosed function every 2 seconds
+            pollingInterval = setInterval(async () => {
+                try {
+                    // CONVERSATION #2: Make a new request to the status URL
+                    const response = await fetch(statusUrl);
+                    const data = await response.json();
+
+                    // Update the status text on the page
+                    statusContainer.innerText = `Job Status: ${data.status}`;
+
+                    // If the job is finished (either completed or failed)
+                    if (data.status === 'completed' || data.status === 'failed') {
+                        // 1. Stop the polling
+                        clearInterval(pollingInterval);
+                        // 2. Display the final result from the job file
+                        resultContainer.innerText = data.result;
+                        // 3. Re-enable the form so the user can submit another URL
+                        submitButton.disabled = false;
+                        linkInput.disabled = false;
+                    }
+                } catch (error) {
+                    console.error('Polling error:', error);
+                    statusContainer.innerText = 'Error checking job status. Please try again.';
+                    clearInterval(pollingInterval);
+                    submitButton.disabled = false;
+                    linkInput.disabled = false;
+                }
+            }, 2000); // Poll every 2 seconds
+        };
+
+        // This is the main event listener for the form
+        linkForm.addEventListener('submit', async (event) => {
+            // Prevent the default form action (which would reload the page)
+            event.preventDefault();
+            
+            // If we are already polling for a previous job, stop it.
+            if (pollingInterval) clearInterval(pollingInterval);
+
+            const link = linkInput.value;
+            
+            // Update the UI to show that we're starting
+            submitButton.disabled = true;
+            linkInput.disabled = true;
+            statusContainer.innerText = 'Submitting job to the server...';
+            resultContainer.innerText = '';
+            
+            try {
+                // CONVERSATION #1: Send the URL to the server to start the job
+                const response = await fetch('/start-job', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ link: link })
+                });
+
+                if (!response.ok) throw new Error('Failed to start job.');
+                
+                // Get the response, which contains the job ID and the status URL
+                const data = await response.json();
+                statusContainer.innerText = 'Job started successfully! Waiting for results...';
+
+                // Start Conversation #2 by polling the status URL
+                pollStatus(data.status_url);
+
+            } catch (error) {
+                console.error('Submission error:', error);
+                statusContainer.innerText = `Error: ${error.message}`;
+                submitButton.disabled = false;
+                linkInput.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

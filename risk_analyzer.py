@@ -4,7 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 import google.generativeai as genai
 
-API_KEY = "AIzaSyBG0i4nXf09Yu-e9eEs2mMX1ilwf5gdBsM" #os.getenv("GEMINI_API_KEY")
+API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not API_KEY:
     print("Error! The environment variable is not set.", file=sys.stderr)
