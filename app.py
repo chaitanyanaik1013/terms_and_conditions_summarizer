@@ -39,11 +39,19 @@ def start_job():
         json.dump({"status": "pending", "url": url, "result": None}, f)
     
     # 3. Start the background worker script (the "Project Manager").
-    #    `subprocess.Popen` is NON-BLOCKING. It starts the script and immediately moves on.
-    #    Make sure the python executable path is correct for your system.
-    python_executable = "venv/bin/python" # For Linux/macOS
-    # python_executable = "venv\\Scripts\\python.exe" # For Windows
-    subprocess.Popen([python_executable, "run_worker.py", job_id, url])
+    # Create a unique log file path for this specific job's output
+    log_file_path = JOBS_DIR / f"{job_id}.log"
+
+    # Open the log file in write mode
+    with open(log_file_path, "w") as log_file:
+        # Start the background process, but this time, tell it where to send its output
+        python_executable = "venv/bin/python3" # In Codespaces, python3 is more reliable
+        # python_executable = "venv\\Scripts\\python.exe" # For Windows
+        subprocess.Popen(
+            [python_executable, "run_worker.py", job_id, url],
+            stdout=log_file,  # Redirect standard output to our log file
+            stderr=log_file   # Redirect standard error (IMPORTANT!) to our log file
+        )
 
     # 4. Immediately return the job ID so the browser knows how to check the status later.
     return jsonify({
