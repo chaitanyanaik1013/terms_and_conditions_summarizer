@@ -1,3 +1,4 @@
+# run_worker.py (Corrected and Improved Version)
 import sys
 import subprocess
 import json
@@ -6,9 +7,10 @@ from pathlib import Path
 JOBS_DIR = Path("jobs")
 
 def run_job(job_id, url):
-    job_file = JOBS_DIR/f"{job_id}.json"
+    job_file = JOBS_DIR / f"{job_id}.json"
 
     def update_job_file(status, result=None):
+        # This helper function is the same as before
         with open(job_file, 'r+') as f:
             data = json.load(f)
             data['status'] = status
@@ -17,22 +19,28 @@ def run_job(job_id, url):
             json.dump(data, f)
             f.truncate()
 
-        update_job_file("running")
+    update_job_file("running")
 
-        try:
-            result = subprocess.check_output(
-                ["python", "risk_analyzer.py", url],
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding='utf-8'
-            )
-            update_job_file("completed", result)
+    try:
+        # THE FIX IS HERE: We are now using "python3"
+        result = subprocess.check_output(
+            ["python3", "risk_analyzer.py", url],
+            stderr=subprocess.PIPE, # Capture stderr to see errors from the script
+            text=True,
+            encoding='utf-8'
+        )
+        update_job_file("completed", result)
 
-        except subprocess.CalledProcessError as e:
-            error_output = f"Script failed with exit code {e.returncode}.\n---Error Log---\n{e.stderr}"
-            update_job_file("failed", error_output)
-        except Exception as e:
-            update_job_file("failed", str(e))      
+    except subprocess.CalledProcessError as e:
+        # This error handling is improved to be more visible
+        error_output = f"The risk_analyzer.py script failed with exit code {e.returncode}.\n"
+        error_output += f"--- Error Log ---\n{e.stderr}"
+        print(error_output, file=sys.stderr) # Print to stderr for debugging
+        update_job_file("failed", error_output)
+    except Exception as e:
+        # General error handling
+        print(f"An unexpected error occurred in run_worker: {e}", file=sys.stderr)
+        update_job_file("failed", str(e))
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
