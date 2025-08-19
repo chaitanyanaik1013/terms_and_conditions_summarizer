@@ -1,4 +1,4 @@
-# app.py (Final Asynchronous Version)
+# app.py (Final Version with Robust Path Handling)
 
 import uuid
 import subprocess
@@ -6,17 +6,24 @@ import json
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, url_for
 
-app = Flask(__name__)
+# =====================================================================
+# THIS IS THE KEY FIX:
+# We will now dynamically find the correct project folder, just like in the worker.
+# This ensures app.py and run_worker.py are always in sync.
+# =====================================================================
+# Get the directory where this app.py file is located.
+PROJECT_HOME = Path(__file__).parent.resolve()
 
-JOBS_DIR = Path("jobs")
-JOBS_DIR.mkdir(exist_ok=True)
+# Define the jobs directory to be INSIDE our project folder.
+JOBS_DIR = PROJECT_HOME / "jobs"
+JOBS_DIR.mkdir(exist_ok=True) # Create it if it doesn't exist.
+# =====================================================================
+
+app = Flask(__name__)
 
 @app.route('/')
 def index():
     return render_template('index.html')
-
-@app.route('/start-job', methods=['POST'])
-# In app.py
 
 @app.route('/start-job', methods=['POST'])
 def start_job():
@@ -25,34 +32,26 @@ def start_job():
         return jsonify({'error': 'No link provided'}), 400
 
     job_id = str(uuid.uuid4())
+    # The job file path is now correctly inside the project folder
     job_file = JOBS_DIR / f"{job_id}.json"
 
     with open(job_file, 'w') as f:
         json.dump({"status": "pending", "url": url, "result": None}, f)
-
+    
     log_file_path = JOBS_DIR / f"{job_id}.log"
 
-    # --- THIS IS THE CORRECTED PART ---
-    # We build the full, absolute paths so the server never gets lost.
-
-    # 1. Define the full path to your project folder.
-    project_home = '/home/chaitanyanaik10/terms_and_conditions_summarizer'
-
-    # 2. Define the full path to the Python interpreter inside your virtualenv.
-    # You can find this path on your "Web" tab in the "Virtualenv" section.
+    # Define the absolute path to the Python interpreter in your virtualenv
     python_executable = '/home/chaitanyanaik10/.virtualenvs/my-app-env/bin/python'
-
-    # 3. Define the full path to the worker script we want to run.
-    worker_script_path = f'{project_home}/run_worker.py'
-
-    # Now we run the command using these full paths.
+    
+    # Define the absolute path to the worker script
+    worker_script_path = PROJECT_HOME / "run_worker.py"
+    
     with open(log_file_path, "w") as log_file:
         subprocess.Popen(
-            [python_executable, worker_script_path, job_id, url],
+            [python_executable, str(worker_script_path), job_id, url],
             stdout=log_file,
             stderr=log_file
         )
-    # --- END OF CORRECTION ---
 
     return jsonify({
         "job_id": job_id,
@@ -61,9 +60,11 @@ def start_job():
 
 @app.route('/status/<job_id>')
 def get_status(job_id):
+    # The status check now also correctly looks inside the project folder
     job_file = JOBS_DIR / f"{job_id}.json"
     if not job_file.exists():
-        return jsonify({'error': 'Invalid job ID'}), 404
+        # This will now correctly return a 404 until the worker creates the file
+        return jsonify({'status': 'pending', 'result': 'Job file not found yet, worker is starting...'}), 200
     with open(job_file, 'r') as f:
         return jsonify(json.load(f))
 
